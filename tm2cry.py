@@ -34,42 +34,15 @@ def readTMToDict(pathToFile):
   """ Reads all basissets in the given file 
       to a dict and returns it.
   """
-  basisset = {}
-  
-  print "Convert all basissets from", pathToFile
 
-  inFileHandle = open(pathToFile, "r")
-  for line in inFileHandle:
-  
-    items = line.split()
-
-    # skip empty lines
-    if items == []: continue
-    
-    # search atom names otherwise skip that
-    if items[0].title() not in atoms.chemical_symbols: continue
-
-    symbol = items[0].title()
-    basisset[symbol] = []
-    
-      
-    for item in items:
-      if "ecp" in item.strip(): 
-        print "EEEEECCCCCCCCCPPPPPPPPPP"
-
-
-    print "reading basisset for", symbol   
-    # there should be a '*' next.. skip comments
-    for line in inFileHandle:
-      # skip comments
-      if line.strip()[0] == "#": continue
-      # found the right smybol
-      if line.strip()[0] == "*": break
-
-    # write the actual basis function
+  def readBasis(inFileHandle, basisset):
+    """ to read a basis
+    """
+    # read the actual basis function
     for line in inFileHandle:
       items = line.split()
 
+      if items[0][0] == "#": continue # skip comments
       if items == []: 
         print "WARNING: Empty line in atomic block!"
         continue
@@ -89,7 +62,79 @@ def readTMToDict(pathToFile):
         numLinesToRead -= 1
         if numLinesToRead == 0: break
       
-      basisset[symbol].append(function)
+      basisset[symbol]["basis"].append(function)
+
+  def readECP(inFileHandle, basisset):
+    for line in inFileHandle:
+      items = line.split()
+
+      if items[0][0] == "#": continue # skip comments
+      if items == []: 
+        print "WARNING: Empty line in ecp atomic block!"
+        continue
+      if items[0].strip()[0] == "*": 
+        print "finished ecp for ", symbol
+        break
+    
+      functype = items[1].strip()
+      ecp = { "type"    : functype, 
+              "numbers" : []      ,
+              "numEl"   : 0       ,}
+
+      numLinesToRead = int(items[0])
+      for line in inFileHandle:
+        items = line.split()
+        function["numbers"].append( (float(items[0]), float(items[1])) )
+        numLinesToRead -= 1
+        if numLinesToRead == 0: break
+      
+      basisset[symbol]["basis"].append(function)
+    
+
+  #############################################################################
+  ##                                                                         ##
+  ##                            actual function                              ##
+  ##                                                                         ##
+  #############################################################################
+
+  basisset = {}
+  
+  print "Read all basissets from", pathToFile
+
+  inFileHandle = open(pathToFile, "r")
+  for line in inFileHandle:
+  
+    items = line.split()
+
+    # skip empty lines
+    if items == []: continue
+    
+    # search atom names otherwise skip that
+    if items[0].title() not in atoms.chemical_symbols: continue
+
+    symbol = items[0].title()
+    basisset[symbol] = {"basis" : [],
+                        "ecp"   : []}
+    
+    # check if we got an ecp case
+    isECP = False 
+    for item in items:
+      if "ecp" in item.strip(): 
+        isECP = True
+
+
+    print "reading for", symbol   
+    # there should be a '*' next.. skip comments
+    for line in inFileHandle:
+      # skip comments
+      if line.strip()[0] == "#": continue
+      # found the right smybol
+      if line.strip()[0] == "*": break
+    
+    if not isECP:
+      readBasis(inFileHandle, basisset)
+    else:
+      readECP(inFileHandle, basisset)
 
   inFileHandle.close()
   return basisset
@@ -105,7 +150,7 @@ def writeAsCrystal(basisset):
 
     fileH = open(filename, "w")
     # writing the header to the file
-    funcs = basisset[key]
+    funcs = basisset[key]["basis"]
     fileH.write("%d %d\n" % (atoms.atomic_numbers[key], len(funcs)))
 
     # distribute the electrons with the aufbau principle
